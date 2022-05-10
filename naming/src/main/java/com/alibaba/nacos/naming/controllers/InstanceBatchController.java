@@ -19,17 +19,18 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import java.util.*;
 
+
 @RestController
 @RequestMapping(UtilsAndCommons.NACOS_NAMING_CONTEXT + "/instances/batch")
 public class InstanceBatchController {
-    private final ServiceManager serviceManager;
+//    private final ServiceManager serviceManager;
+
+    private final InstanceController instanceController;
 
     @Autowired
-    private  InstanceController instanceController;
-
-    @Autowired
-    public InstanceBatchController(ServiceManager serviceManager) {
-        this.serviceManager = serviceManager;
+    public InstanceBatchController(InstanceController instanceController) {
+//        this.serviceManager = serviceManager;
+        this.instanceController = instanceController;
     }
 
     @PostMapping("/list")
@@ -71,9 +72,12 @@ public class InstanceBatchController {
                              int udpPort, String env, boolean isCheck, String app, String tenant, boolean healthyOnly) throws Exception {
         List<ObjectNode> serviceInfoList = new ArrayList<>();
         for ( String serviceName : serviceNameList) {
-            serviceName = groupName + Constants.SERVICE_INFO_SPLITER + serviceName;
-                serviceInfoList.add(instanceController.doSrvIpxt(namespaceId, serviceName, agent, clusters, clientIP, udpPort, env, isCheck, app, tenant,
-                    healthyOnly));
+            if (!serviceName.matches("[0-9a-zA-Z@\\.:_-]+@@[0-9a-zA-Z@\\.:_-]+")) {
+                serviceName = groupName + Constants.SERVICE_INFO_SPLITER + serviceName;
+            }
+            ObjectNode res = instanceController.doSrvIpxt(namespaceId, serviceName, agent, clusters, clientIP, udpPort, env, isCheck, app, tenant,
+                healthyOnly);
+            serviceInfoList.add(res);
         }
         return serviceInfoList;
     }

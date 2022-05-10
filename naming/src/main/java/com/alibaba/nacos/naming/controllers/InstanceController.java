@@ -72,21 +72,21 @@ import java.util.Map;
 @RestController
 @RequestMapping(UtilsAndCommons.NACOS_NAMING_CONTEXT + "/instance")
 public class InstanceController {
-    
+
     @Autowired
     private SwitchDomain switchDomain;
-    
+
     @Autowired
     private PushService pushService;
-    
+
     @Autowired
     private ServiceManager serviceManager;
-    
+
     private DataSource pushDataSource = new DataSource() {
-        
+
         @Override
         public String getData(PushService.PushClient client) {
-            
+
             ObjectNode result = JacksonUtils.createEmptyJsonNode();
             try {
                 result = doSrvIpxt(client.getNamespaceId(), client.getServiceName(), client.getAgent(),
@@ -95,14 +95,14 @@ public class InstanceController {
             } catch (Exception e) {
                 Loggers.SRV_LOG.warn("PUSH-SERVICE: service is not modified", e);
             }
-            
+
             // overdrive the cache millis to push mode
             result.put("cacheMillis", switchDomain.getPushCacheMillis(client.getServiceName()));
-            
+
             return result.toString();
         }
     };
-    
+
     /**
      * Register new instance.
      *
@@ -114,17 +114,17 @@ public class InstanceController {
     @PostMapping
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
     public String register(HttpServletRequest request) throws Exception {
-        
+
         final String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         final String namespaceId = WebUtils
                 .optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
-        
+
         final Instance instance = parseInstance(request);
-        
+
         serviceManager.registerInstance(namespaceId, serviceName, instance);
         return "ok";
     }
-    
+
     /**
      * Deregister instances.
      *
@@ -139,17 +139,17 @@ public class InstanceController {
         Instance instance = getIpAddress(request);
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
-        
+
         Service service = serviceManager.getService(namespaceId, serviceName);
         if (service == null) {
             Loggers.SRV_LOG.warn("remove instance from non-exist service: {}", serviceName);
             return "ok";
         }
-        
+
         serviceManager.removeInstance(namespaceId, serviceName, instance.isEphemeral(), instance);
         return "ok";
     }
-    
+
     /**
      * Update instance.
      *
@@ -165,11 +165,11 @@ public class InstanceController {
         final String namespaceId = WebUtils
                 .optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         final Instance instance = parseInstance(request);
-        
+
         String agent = WebUtils.getUserAgent(request);
-        
+
         ClientInfo clientInfo = new ClientInfo(agent);
-        
+
         if (clientInfo.type == ClientInfo.ClientType.JAVA
                 && clientInfo.version.compareTo(VersionUtil.parseVersion("1.0.0")) >= 0) {
             serviceManager.updateInstance(namespaceId, serviceName, instance);
@@ -178,7 +178,7 @@ public class InstanceController {
         }
         return "ok";
     }
-    
+
     /**
      * Patch instance.
      *
@@ -198,12 +198,12 @@ public class InstanceController {
         if (StringUtils.isBlank(cluster)) {
             cluster = WebUtils.optional(request, "cluster", UtilsAndCommons.DEFAULT_CLUSTER_NAME);
         }
-        
+
         Instance instance = serviceManager.getInstance(namespaceId, serviceName, cluster, ip, Integer.parseInt(port));
         if (instance == null) {
             throw new IllegalArgumentException("instance not found");
         }
-        
+
         String metadata = WebUtils.optional(request, "metadata", StringUtils.EMPTY);
         if (StringUtils.isNotBlank(metadata)) {
             instance.setMetadata(UtilsAndCommons.parseMetadata(metadata));
@@ -229,7 +229,7 @@ public class InstanceController {
         serviceManager.updateInstance(namespaceId, serviceName, instance);
         return "ok";
     }
-    
+
     /**
      * Get all instance of input service.
      *
@@ -240,9 +240,9 @@ public class InstanceController {
     @GetMapping("/list")
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.READ)
     public ObjectNode list(HttpServletRequest request) throws Exception {
-        
+
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
-        
+
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         String agent = WebUtils.getUserAgent(request);
         String clusters = WebUtils.optional(request, "clusters", StringUtils.EMPTY);
@@ -250,17 +250,17 @@ public class InstanceController {
         int udpPort = Integer.parseInt(WebUtils.optional(request, "udpPort", "0"));
         String env = WebUtils.optional(request, "env", StringUtils.EMPTY);
         boolean isCheck = Boolean.parseBoolean(WebUtils.optional(request, "isCheck", "false"));
-        
+
         String app = WebUtils.optional(request, "app", StringUtils.EMPTY);
-        
+
         String tenant = WebUtils.optional(request, "tid", StringUtils.EMPTY);
-        
+
         boolean healthyOnly = Boolean.parseBoolean(WebUtils.optional(request, "healthyOnly", "false"));
-        
+
         return doSrvIpxt(namespaceId, serviceName, agent, clusters, clientIP, udpPort, env, isCheck, app, tenant,
                 healthyOnly);
     }
-    
+
     /**
      * Get detail information of specified instance.
      *
@@ -271,27 +271,27 @@ public class InstanceController {
     @GetMapping
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.READ)
     public ObjectNode detail(HttpServletRequest request) throws Exception {
-        
+
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         String cluster = WebUtils.optional(request, CommonParams.CLUSTER_NAME, UtilsAndCommons.DEFAULT_CLUSTER_NAME);
         String ip = WebUtils.required(request, "ip");
         int port = Integer.parseInt(WebUtils.required(request, "port"));
-        
+
         Service service = serviceManager.getService(namespaceId, serviceName);
         if (service == null) {
             throw new NacosException(NacosException.NOT_FOUND, "no service " + serviceName + " found!");
         }
-        
+
         List<String> clusters = new ArrayList<>();
         clusters.add(cluster);
-        
+
         List<Instance> ips = service.allIPs(clusters);
         if (ips == null || ips.isEmpty()) {
             throw new NacosException(NacosException.NOT_FOUND,
                     "no ips found for cluster " + cluster + " in service " + serviceName);
         }
-        
+
         for (Instance instance : ips) {
             if (instance.getIp().equals(ip) && instance.getPort() == port) {
                 ObjectNode result = JacksonUtils.createEmptyJsonNode();
@@ -306,10 +306,10 @@ public class InstanceController {
                 return result;
             }
         }
-        
+
         throw new NacosException(NacosException.NOT_FOUND, "no matched ip found!");
     }
-    
+
     /**
      * Create a beat for instance.
      *
@@ -321,19 +321,20 @@ public class InstanceController {
     @PutMapping("/beat")
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
     public ObjectNode beat(HttpServletRequest request) throws Exception {
-        
+
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
         result.put(SwitchEntry.CLIENT_BEAT_INTERVAL, switchDomain.getClientBeatInterval());
-        
+
         String beat = WebUtils.optional(request, "beat", StringUtils.EMPTY);
         RsInfo clientBeat = null;
         if (StringUtils.isNotBlank(beat)) {
-            clientBeat = JacksonUtils.toObj(beat, RsInfo.class);
+            clientBeat = JacksonUtils.toObj(beat, RsInfo.class);//beat是RsInfo类型的json；序列化是把对象转成字节流，反序列化是把流转成对象。
         }
         String clusterName = WebUtils
                 .optional(request, CommonParams.CLUSTER_NAME, UtilsAndCommons.DEFAULT_CLUSTER_NAME);
         String ip = WebUtils.optional(request, "ip", StringUtils.EMPTY);
         int port = Integer.parseInt(WebUtils.optional(request, "port", "0"));
+        //如果心跳不为空，就把心跳中的cluster、ip、port赋值给cluster，如果为空，就用request中的cluster、ip、port
         if (clientBeat != null) {
             if (StringUtils.isNotBlank(clientBeat.getCluster())) {
                 clusterName = clientBeat.getCluster();
@@ -347,17 +348,20 @@ public class InstanceController {
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         Loggers.SRV_LOG.debug("[CLIENT-BEAT] full arguments: beat: {}, serviceName: {}", clientBeat, serviceName);
+
+        //开始循环
         Instance instance = serviceManager.getInstance(namespaceId, serviceName, clusterName, ip, port);
-        
+
+        //如果没有这个实例，就会新建一个实例
         if (instance == null) {
             if (clientBeat == null) {
                 result.put(CommonParams.CODE, NamingResponseCode.RESOURCE_NOT_FOUND);
                 return result;
             }
-            
+
             Loggers.SRV_LOG.warn("[CLIENT-BEAT] The instance has been removed for health mechanism, "
                     + "perform data compensation operations, beat: {}, serviceName: {}", clientBeat, serviceName);
-            
+
             instance = new Instance();
             instance.setPort(clientBeat.getPort());
             instance.setIp(clientBeat.getIp());
@@ -367,16 +371,18 @@ public class InstanceController {
             instance.setServiceName(serviceName);
             instance.setInstanceId(instance.getInstanceId());
             instance.setEphemeral(clientBeat.isEphemeral());
-            
+
             serviceManager.registerInstance(namespaceId, serviceName, instance);
         }
-        
+        //结束循环
+
         Service service = serviceManager.getService(namespaceId, serviceName);
-        
+
         if (service == null) {
             throw new NacosException(NacosException.SERVER_ERROR,
                     "service not found: " + serviceName + "@" + namespaceId);
         }
+        //有实例有服务，但是没传入心跳信息
         if (clientBeat == null) {
             clientBeat = new RsInfo();
             clientBeat.setIp(ip);
@@ -384,7 +390,7 @@ public class InstanceController {
             clientBeat.setCluster(clusterName);
         }
         service.processClientBeat(clientBeat);
-        
+
         result.put(CommonParams.CODE, NamingResponseCode.OK);
         if (instance.containsMetadata(PreservedMetadataKeys.HEART_BEAT_INTERVAL)) {
             result.put(SwitchEntry.CLIENT_BEAT_INTERVAL, instance.getInstanceHeartBeatInterval());
@@ -392,7 +398,7 @@ public class InstanceController {
         result.put(SwitchEntry.LIGHT_BEAT_ENABLED, switchDomain.isLightBeatEnabled());
         return result;
     }
-    
+
     /**
      * List all instance with health status.
      *
@@ -402,10 +408,10 @@ public class InstanceController {
      */
     @RequestMapping("/statuses")
     public ObjectNode listWithHealthStatus(@RequestParam String key) throws NacosException {
-        
+
         String serviceName;
         String namespaceId;
-        
+
         if (key.contains(UtilsAndCommons.NAMESPACE_SERVICE_CONNECTOR)) {
             namespaceId = key.split(UtilsAndCommons.NAMESPACE_SERVICE_CONNECTOR)[0];
             serviceName = key.split(UtilsAndCommons.NAMESPACE_SERVICE_CONNECTOR)[1];
@@ -413,28 +419,28 @@ public class InstanceController {
             namespaceId = Constants.DEFAULT_NAMESPACE_ID;
             serviceName = key;
         }
-        
+
         Service service = serviceManager.getService(namespaceId, serviceName);
-        
+
         if (service == null) {
             throw new NacosException(NacosException.NOT_FOUND, "service: " + serviceName + " not found.");
         }
-        
+
         List<Instance> ips = service.allIPs();
-        
+
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
         ArrayNode ipArray = JacksonUtils.createEmptyArrayNode();
-        
+
         for (Instance ip : ips) {
             ipArray.add(ip.toIpAddr() + "_" + ip.isHealthy());
         }
-        
+
         result.replace("ips", ipArray);
         return result;
     }
-    
+
     private Instance parseInstance(HttpServletRequest request) throws Exception {
-        
+
         String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
         String app = WebUtils.optional(request, "app", "DEFAULT");
         Instance instance = getIpAddress(request);
@@ -448,12 +454,12 @@ public class InstanceController {
         if (StringUtils.isNotEmpty(metadata)) {
             instance.setMetadata(UtilsAndCommons.parseMetadata(metadata));
         }
-        
+
         instance.validate();
-        
+
         return instance;
     }
-    
+
     private Instance getIpAddress(HttpServletRequest request) {
         final String ip = WebUtils.required(request, "ip");
         final String port = WebUtils.required(request, "port");
@@ -468,13 +474,13 @@ public class InstanceController {
         } else {
             enabled = BooleanUtils.toBoolean(enabledString);
         }
-        
+
         boolean ephemeral = BooleanUtils.toBoolean(
                 WebUtils.optional(request, "ephemeral", String.valueOf(switchDomain.isDefaultInstanceEphemeral())));
-        
+
         String weight = WebUtils.optional(request, "weight", "1");
         boolean healthy = BooleanUtils.toBoolean(WebUtils.optional(request, "healthy", "true"));
-        
+
         Instance instance = new Instance();
         instance.setPort(Integer.parseInt(port));
         instance.setIp(ip);
@@ -483,16 +489,16 @@ public class InstanceController {
         instance.setHealthy(healthy);
         instance.setEnabled(enabled);
         instance.setEphemeral(ephemeral);
-        
+
         return instance;
     }
-    
+
     private void checkIfDisabled(Service service) throws Exception {
         if (!service.getEnabled()) {
             throw new Exception("service is disabled now.");
         }
     }
-    
+
     /**
      * Get service full information with instances.
      *
@@ -512,11 +518,12 @@ public class InstanceController {
      */
     public ObjectNode doSrvIpxt(String namespaceId, String serviceName, String agent, String clusters, String clientIP,
             int udpPort, String env, boolean isCheck, String app, String tid, boolean healthyOnly) throws Exception {
-        
+
         ClientInfo clientInfo = new ClientInfo(agent);
         ObjectNode result = JacksonUtils.createEmptyJsonNode();
         Service service = serviceManager.getService(namespaceId, serviceName);
-        
+
+        //如果获取到的服务为空，返回空列表
         if (service == null) {
             if (Loggers.SRV_LOG.isDebugEnabled()) {
                 Loggers.SRV_LOG.debug("no instance to serve for service: {}", serviceName);
@@ -526,15 +533,15 @@ public class InstanceController {
             result.replace("hosts", JacksonUtils.createEmptyArrayNode());
             return result;
         }
-        
+
         checkIfDisabled(service);
-        
+
         long cacheMillis = switchDomain.getDefaultCacheMillis();
-        
+
         // now try to enable the push
         try {
             if (udpPort > 0 && pushService.canEnablePush(agent)) {
-                
+
                 pushService
                         .addClient(namespaceId, serviceName, clusters, agent, new InetSocketAddress(clientIP, udpPort),
                                 pushDataSource, tid, app);
@@ -545,29 +552,29 @@ public class InstanceController {
                     .error("[NACOS-API] failed to added push client {}, {}:{}", clientInfo, clientIP, udpPort, e);
             cacheMillis = switchDomain.getDefaultCacheMillis();
         }
-        
+
         List<Instance> srvedIPs;
-        
+
         srvedIPs = service.srvIPs(Arrays.asList(StringUtils.split(clusters, ",")));
-        
+
         // filter ips using selector:
         if (service.getSelector() != null && StringUtils.isNotBlank(clientIP)) {
             srvedIPs = service.getSelector().select(clientIP, srvedIPs);
         }
-        
+
         if (CollectionUtils.isEmpty(srvedIPs)) {
-            
+
             if (Loggers.SRV_LOG.isDebugEnabled()) {
                 Loggers.SRV_LOG.debug("no instance to serve for service: {}", serviceName);
             }
-            
+
             if (clientInfo.type == ClientInfo.ClientType.JAVA
                     && clientInfo.version.compareTo(VersionUtil.parseVersion("1.0.0")) >= 0) {
                 result.put("dom", serviceName);
             } else {
                 result.put("dom", NamingUtils.getServiceName(serviceName));
             }
-            
+
             result.put("hosts", JacksonUtils.createEmptyArrayNode());
             result.put("name", serviceName);
             result.put("cacheMillis", cacheMillis);
@@ -579,57 +586,57 @@ public class InstanceController {
             result.put("metadata", JacksonUtils.transferToJsonNode(service.getMetadata()));
             return result;
         }
-        
+
         Map<Boolean, List<Instance>> ipMap = new HashMap<>(2);
         ipMap.put(Boolean.TRUE, new ArrayList<>());
         ipMap.put(Boolean.FALSE, new ArrayList<>());
-        
+
         for (Instance ip : srvedIPs) {
             ipMap.get(ip.isHealthy()).add(ip);
         }
-        
+
         if (isCheck) {
             result.put("reachProtectThreshold", false);
         }
-        
+
         double threshold = service.getProtectThreshold();
-        
+
         if ((float) ipMap.get(Boolean.TRUE).size() / srvedIPs.size() <= threshold) {
-            
+
             Loggers.SRV_LOG.warn("protect threshold reached, return all ips, service: {}", serviceName);
             if (isCheck) {
                 result.put("reachProtectThreshold", true);
             }
-            
+
             ipMap.get(Boolean.TRUE).addAll(ipMap.get(Boolean.FALSE));
             ipMap.get(Boolean.FALSE).clear();
         }
-        
+
         if (isCheck) {
             result.put("protectThreshold", service.getProtectThreshold());
             result.put("reachLocalSiteCallThreshold", false);
-            
+
             return JacksonUtils.createEmptyJsonNode();
         }
-        
+
         ArrayNode hosts = JacksonUtils.createEmptyArrayNode();
-        
+
         for (Map.Entry<Boolean, List<Instance>> entry : ipMap.entrySet()) {
             List<Instance> ips = entry.getValue();
-            
+
             if (healthyOnly && !entry.getKey()) {
                 continue;
             }
-            
+
             for (Instance instance : ips) {
-                
+
                 // remove disabled instance:
                 if (!instance.isEnabled()) {
                     continue;
                 }
-                
+
                 ObjectNode ipObj = JacksonUtils.createEmptyJsonNode();
-                
+
                 ipObj.put("ip", instance.getIp());
                 ipObj.put("port", instance.getPort());
                 // deprecated since nacos 1.0.0:
@@ -647,13 +654,13 @@ public class InstanceController {
                 } else {
                     ipObj.put("serviceName", NamingUtils.getServiceName(instance.getServiceName()));
                 }
-                
+
                 ipObj.put("ephemeral", instance.isEphemeral());
                 hosts.add(ipObj);
-                
+
             }
         }
-        
+
         result.replace("hosts", hosts);
         if (clientInfo.type == ClientInfo.ClientType.JAVA
                 && clientInfo.version.compareTo(VersionUtil.parseVersion("1.0.0")) >= 0) {
