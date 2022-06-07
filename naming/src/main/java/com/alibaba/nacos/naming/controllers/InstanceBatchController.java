@@ -7,6 +7,7 @@ import com.alibaba.nacos.core.auth.ActionTypes;
 import com.alibaba.nacos.core.auth.Secured;
 import com.alibaba.nacos.core.utils.WebUtils;
 import com.alibaba.nacos.naming.core.ServiceManager;
+import com.alibaba.nacos.naming.extend.UploadServiceProcessor;
 import com.alibaba.nacos.naming.misc.UtilsAndCommons;
 import com.alibaba.nacos.naming.web.NamingResourceParser;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -28,6 +29,9 @@ public class InstanceBatchController {
     private final InstanceController instanceController;
 
     @Autowired
+    private UploadServiceProcessor uploadServiceProcessor;
+
+    @Autowired
     public InstanceBatchController(InstanceController instanceController) {
 //        this.serviceManager = serviceManager;
         this.instanceController = instanceController;
@@ -36,6 +40,8 @@ public class InstanceBatchController {
     @PostMapping("/list")
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.READ)
     public List<ObjectNode> list(HttpServletRequest request) throws Exception {
+
+        uploadServiceProcessor.transferServiceListToFile();
 
         String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID, Constants.DEFAULT_NAMESPACE_ID);
         String agent = WebUtils.getUserAgent(request);
